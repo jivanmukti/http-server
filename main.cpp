@@ -1,16 +1,23 @@
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/epoll.h>
 #include <iostream>
 #include <string>
 #include <sys/socket.h>
 #include <netinet/in.h>
+
 // Set up connection
 // Process request
 // 	validate request headers
 // 	content
 // 	send back response 
 /* Initializes socket to accept connections */
+
 int conn_sockfd;
 int cli_sockfd;
-int port;
+int port = 3000;
+struct sockaddr_in serv_addr, cli_addr;
+socklen_t size = sizeof(cli_addr);
 
 void error(const char *msg) {
     perror(msg);
@@ -18,7 +25,6 @@ void error(const char *msg) {
 };
 
 void init_sockets(){
-    struct sockaddr_in serv_addr, cli_addr;
     conn_sockfd = socket(AF_INET, SOCK_STREAM, 0);
     
     serv_addr.sin_family = AF_INET;
@@ -32,10 +38,19 @@ void init_sockets(){
     listen(conn_sockfd, 1);
     printf("Listening for connections\n");
 
-    socklen_t size = sizeof(cli_addr);
-    cli_sockfd = accept(conn_sockfd, (struct sockaddr *) &cli_addr, &size);
 };
 
 int main() {
+    init_sockets();
+    while (1) {
+	cli_sockfd = accept(conn_sockfd, (struct sockaddr *) &cli_addr, &size);
+	printf("Connection accepted\n");
+	int flags = fnctl(cli_sockfd, F_GETFL, 0);
+	fcntl(cli_sockfd, flags | SOCK_NONBLOCK);
+
+    };
+    // accept multiple clients
+    // send back response
+    
     return 0;
 };
