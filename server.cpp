@@ -29,9 +29,8 @@ void error(const char *msg) {
 };
 void register_event(int fd) {
     struct epoll_event event;
-    uint32_t ep_events;
     event.data.fd = fd;
-    event.events = ep_events;
+    event.events = EPOLLIN;
     int rc = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event);
     if (rc == -1) {
 	error("epoll_ctl");
