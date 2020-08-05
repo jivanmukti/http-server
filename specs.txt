@@ -1,5 +1,0 @@
-Set up connection
-Process request
-	validate request headers
-	content
-	send back response 
