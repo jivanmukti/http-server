@@ -7,27 +7,24 @@
 #include <stdlib.h>
 #include <termios.h>
 
+const char eof = 0x04;
+const char CTRL_C = 0x03;
+const char CR = 0x0D;
+const char LF = 0x0A;
+const char CRLF[2] = { CR, LF };
 struct termios saved_attributes;
 #define PORT 'p'
 int port;
 
-/* System call errors */
-void error(char *msg) {
+void error(const char *msg) {
     perror(msg);
     exit(0);
 };
 
-/* Restores default terminal attributes */
 void restore_terminal() {
     tcsetattr(STDIN_FILENO, TCSANOW, &saved_attributes);
 };
   
-/* Saves the attributes of the terminal */
-void save_attributes() {
-    tcgetattr(STDIN_FILENO, &saved_attributes);
-};
-
-/* Sets new attributes of the terminal */
 void set_attributes() {
     struct termios attributes;
     tcgetattr(STDIN_FILENO, &attributes);
@@ -37,7 +34,6 @@ void set_attributes() {
     tcsetattr(STDIN_FILENO, TCSANOW, &attributes);
 };
 
-/* Verify that input is coming from stdin */
 void verify_input() {
     if (!isatty(STDIN_FILENO)) {
 	fprintf(stderr, "Input is not a terminal.\n");
@@ -45,15 +41,33 @@ void verify_input() {
     }
 };
 
-/* Create new terminal mode */
 void set_terminal_mode() {
     verify_input();
-    save_attributes();
+    tcgetattr(STDIN_FILENO, &saved_attributes);
     atexit(restore_terminal);
     set_attributes();
 };
 
-/* Handles socket creation and server connection */
+// Print to console and send to server
+void send_data(int server_fd) {
+    int flag = 0;
+    while (1 && !flag) {
+	char buf[256];
+	int read_bytes = read(STDIN_FILENO, buf, sizeof(buf));
+	for (int i = 0; i < read_bytes; i++) {
+	    if (buf[i] == CR || buf[i] == LF) {
+		write(STDOUT_FILENO, &CRLF, 2);
+	    } else if (buf[i] == eof || buf[i] == CTRL_C) {
+		flag = 1;
+		break;
+	    } else {
+		write(STDOUT_FILENO, &buf[i], 1);
+	    };
+	}
+	write(server_fd, &buf, read_bytes);
+    };
+};
+
 int connect_to_server() {
     int sockfd;
     struct hostent *hostinfo;
@@ -61,12 +75,12 @@ int connect_to_server() {
 
     sockfd = socket(AF_INET, SOCK_STREAM, 0); /* Create socket */
     if (sockfd < 0) {
-    	perror("Error creating socket");
+    	error("Error creating socket");
     };
 
     hostinfo = gethostbyname("Localhost");
     if (hostinfo == NULL) {
-	perror("Error with hostinfo");
+	error("Error with hostinfo");
     }
 
     serv_addr.sin_family = AF_INET;
@@ -74,7 +88,7 @@ int connect_to_server() {
     serv_addr.sin_port = htons(port);
 
     if (connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-	perror("Trouble connecting to server.\n");
+	error("Trouble connecting to server");
     }
     return sockfd;
 };
@@ -107,5 +121,9 @@ void process_args(int argc, char *argv[]) {
 
 int main(int argc, char *argv[]) {
     process_args(argc, argv);
-    connect_to_server();
+    int server_fd = connect_to_server();
+    send_data(server_fd);
+    printf("Closing connection\n");
+    close(server_fd);
+    exit(0);
 };
