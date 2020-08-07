@@ -4,4 +4,4 @@ build:
 client:
 	g++ -std=c++2a -Wall -Wextra -o client client.cpp
 clean:
-	rm server
+	rm server client
