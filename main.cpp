@@ -18,66 +18,59 @@ const int MAX_EVENTS = 10;
 int ep_ret;
 int conn_sockfd;
 int cli_sockfd;
+int port = 3000;
 int epoll_fd = epoll_create1(0);
+struct sockaddr_in serv_addr, cli_addr;
+socklen_t size = sizeof(cli_addr);
 
 void error(const char *msg) {
     perror(msg);
     exit(0);
 };
-
-int register_event(int fd) {
+void register_event(int fd) {
     struct epoll_event event;
     event.data.fd = fd;
     event.events = EPOLLIN;
     int rc = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event);
     if (rc == -1) {
-	perror("epoll_ctl()");
-	return -1;
+	error("epoll_ctl");
     };
-    return 0;
 };
 
-int init_sockets(){
-    struct sockaddr_in serv_addr;
-    int port = 3000;
+void init_sockets(){
     conn_sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (conn_sockfd == -1) {
-	perror("socker()");
-	return 1;
-    };
     int flags = fcntl(conn_sockfd, F_GETFL, 0);
-    if(fcntl(conn_sockfd, flags | SOCK_NONBLOCK) == -1) {
-	perror("fcntl()");
-	return 1;
-    };
+    fcntl(conn_sockfd, flags | SOCK_NONBLOCK);
 
     serv_addr.sin_family = AF_INET;
     serv_addr.sin_addr.s_addr = INADDR_ANY;
     serv_addr.sin_port = htons(port);
 
     if (bind(conn_sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
-	perror("bind()");
-	return 1;
+	error("Error binding socket to address");
     };
 
-    if(listen(conn_sockfd, SOMAXCONN) < 0) {
-	perror("listen()");
-	return 1;
-    };
+    listen(conn_sockfd, SOMAXCONN);
     register_event(conn_sockfd);
     printf("Listening for connections\n");
-    return 0;
+
 };
 
-int handle_client(int fd) {
+
+int accept_clients(int conn_sockfd) {
+    cli_sockfd = accept(conn_sockfd, (struct sockaddr *) &cli_addr, &size);
+    printf("Connection accepted\n");
+    return cli_sockfd;
+};
+
+void handle_client(int fd) {
     char buf[256];
     int close_fd = 0;
     while (1) {
 	int read_bytes = read(fd, buf, sizeof(buf));
 	if (read_bytes == -1) {
 	    if (errno != EAGAIN) {
-		perror("read()");
-		return 1;
+		fprintf(stderr, "Error reading from client\n");
 	    };
 	    break;
 	} else if (read_bytes == 0) {
@@ -88,26 +81,21 @@ int handle_client(int fd) {
 
 	int write_bytes = write(STDOUT_FILENO, buf, sizeof(buf));
 	if (write_bytes < 0) {
-	    perror("write()");
-	    return 1;
+	    error("write()");
 	};
     };
     if (close_fd) {
 	close(fd);
     };
-    return 0;
 };
 
 int main() {
     init_sockets();
-    struct sockaddr_in cli_addr;
-    socklen_t size = sizeof(cli_addr);
     struct epoll_event events[MAX_EVENTS];
     while (1) {
         ep_ret = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
 	if (ep_ret < 0) {
-	    perror("epoll_wait()");
-	    return 1;
+	    error("epoll_wait()");
 	};
 	for (int i = 0; i < ep_ret; i++) {
 	    // If error, hangup, or not ready 
@@ -118,16 +106,10 @@ int main() {
 	    } else if (events[i].data.fd == conn_sockfd) {
 		// We loop until no more pending connections in queue
 		while(1) {
-		    cli_sockfd = accept(conn_sockfd, (struct sockaddr *) &cli_addr, &size);
-		    if (cli_sockfd == -1) {
-			if (errno == EAGAIN || errno == EWOULDBLOCK) {
-			    break;
-			} else {
-			    perror("accept()");
-			    return -1;
-			};
+		    int cli_sockfd = accept_clients(conn_sockfd);
+		    if (cli_sockfd < 0) {
+			break;
 		    };
-		    printf("Connection accepted\n");
 		    register_event(cli_sockfd);
 		};
 	    } else {
