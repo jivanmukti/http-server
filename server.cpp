@@ -39,14 +39,18 @@ int register_event(int fd) {
 
 int init_sockets(){
     struct sockaddr_in serv_addr;
-    int port = 3000;
+    int port = 3001;
     conn_sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (conn_sockfd == -1) {
-	perror("socker()");
+	perror("socket()");
 	return 1;
     };
     int flags = fcntl(conn_sockfd, F_GETFL, 0);
-    if(fcntl(conn_sockfd, flags | SOCK_NONBLOCK) == -1) {
+    if (flags == -1) {
+	perror("flags");
+	return 1;
+    };
+    if(fcntl(conn_sockfd, F_SETFL, flags | O_NONBLOCK) == -1) {
 	perror("fcntl()");
 	return 1;
     };
