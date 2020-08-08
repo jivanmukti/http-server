@@ -1,3 +1,4 @@
+#include <getopt.h>
 #include <bits/stdint-uintn.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -13,12 +14,13 @@
 // 	content
 // 	send back response 
 /* Initializes socket to accept connections */
-
+#define PORT 'p'
 const int MAX_EVENTS = 10;
 int ep_ret;
 int conn_sockfd;
 int cli_sockfd;
 int epoll_fd = epoll_create1(0);
+int port;
 
 void error(const char *msg) {
     perror(msg);
@@ -39,7 +41,6 @@ int register_event(int fd) {
 
 int init_sockets(){
     struct sockaddr_in serv_addr;
-    int port = 3002;
     conn_sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (conn_sockfd == -1) {
 	perror("socket()");
@@ -102,7 +103,34 @@ int handle_client(int fd) {
     return 0;
 };
 
-int main() {
+void process_args(int argc, char *argv[]) {
+    while (1) {
+	int option_index = 0;
+	static struct option long_options[] = {{"port", required_argument, 0, PORT},
+					       {0, 0, 0, 0}};
+	int c = getopt_long(argc, argv, "", long_options, &option_index);
+	if (c == -1) {
+	    break;
+	}
+	switch (c) {
+	case PORT:
+	    port = atoi(optarg);
+	    break;
+	case '?':
+	    fprintf(stderr, "Invalid argument. Arguments are: --port=portnumber \n");
+	    exit(1);
+	default:
+	    break;
+	}
+    }
+    if (!port) {
+	printf("Required argument: --port\n");
+	exit(1);
+    }
+};
+
+int main(int argc, char *argv[]) {
+    process_args(argc, argv);
     init_sockets();
     struct sockaddr_in cli_addr;
     socklen_t size = sizeof(cli_addr);

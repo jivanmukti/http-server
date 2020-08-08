@@ -1,4 +1,5 @@
 #include <unistd.h>
+#include <string.h>
 #include <getopt.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -53,18 +54,23 @@ void send_data(int server_fd) {
     int flag = 0;
     while (1 && !flag) {
 	char buf[256];
+	char header[] = "GET HTTP/1.1\r\n";
+	char host[] = "Host: localhost\r\n";
+	char *request = strcat(header, host);
+
 	int read_bytes = read(STDIN_FILENO, buf, sizeof(buf));
-	for (int i = 0; i < read_bytes; i++) {
-	    if (buf[i] == CR || buf[i] == LF) {
-		write(STDOUT_FILENO, &CRLF, 2);
-	    } else if (buf[i] == eof || buf[i] == CTRL_C) {
-		flag = 1;
-		break;
-	    } else {
-		write(STDOUT_FILENO, &buf[i], 1);
-	    };
-	}
-	write(server_fd, &buf, read_bytes);
+	// for (int i = 0; i < read_bytes; i++) {
+	//     if (buf[i] == CR || buf[i] == LF) {
+	// 	write(STDOUT_FILENO, &CRLF, 2);
+	//     } else if (buf[i] == eof || buf[i] == CTRL_C) {
+	// 	flag = 1;
+	// 	break;
+	//     } else {
+	// 	write(STDOUT_FILENO, &buf[i], 1);
+	//     };
+	// }
+	// write(server_fd, &buf, read_bytes);
+	write(server_fd, request, strlen(request));
     };
 };
 
