@@ -39,7 +39,7 @@ int register_event(int fd) {
 
 int init_sockets(){
     struct sockaddr_in serv_addr;
-    int port = 3001;
+    int port = 3002;
     conn_sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (conn_sockfd == -1) {
 	perror("socket()");
@@ -90,7 +90,7 @@ int handle_client(int fd) {
 	    break;
 	};
 
-	int write_bytes = write(STDOUT_FILENO, buf, sizeof(buf));
+	int write_bytes = write(STDOUT_FILENO, buf, read_bytes);
 	if (write_bytes < 0) {
 	    perror("write()");
 	    return 1;
