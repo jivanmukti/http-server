@@ -1,3 +1,4 @@
+#include <sys/epoll.h>
 #include <unistd.h>
 #include <string.h>
 #include <getopt.h>
@@ -8,14 +9,17 @@
 #include <stdlib.h>
 #include <termios.h>
 
+#define PORT 'p'
+#define MAX_EVENTS 10
 const char eof = 0x04;
 const char CTRL_C = 0x03;
 const char CR = 0x0D;
 const char LF = 0x0A;
 const char CRLF[2] = { CR, LF };
 struct termios saved_attributes;
-#define PORT 'p'
+
 int port;
+int epoll_fd = epoll_create1(0);
 
 void error(const char *msg) {
     perror(msg);
@@ -49,29 +53,57 @@ void set_terminal_mode() {
     set_attributes();
 };
 
-// Print to console and send to server
-void send_data(int server_fd) {
-    int flag = 0;
-    while (1 && !flag) {
-	char buf[256];
-	char header[] = "GET HTTP/1.1\r\n";
-	char host[] = "Host: localhost\r\n";
-	char *request = strcat(header, host);
-
-	int read_bytes = read(STDIN_FILENO, buf, sizeof(buf));
-	// for (int i = 0; i < read_bytes; i++) {
-	//     if (buf[i] == CR || buf[i] == LF) {
-	// 	write(STDOUT_FILENO, &CRLF, 2);
-	//     } else if (buf[i] == eof || buf[i] == CTRL_C) {
-	// 	flag = 1;
-	// 	break;
-	//     } else {
-	// 	write(STDOUT_FILENO, &buf[i], 1);
-	//     };
-	// }
-	// write(server_fd, &buf, read_bytes);
-	write(server_fd, request, strlen(request));
+// Listen for events from stdin and server
+int register_event(int fd) {
+    struct epoll_event event;
+    event.data.fd = fd;
+    event.events = EPOLLIN;
+    int rc = epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &event);
+    if (rc == -1) {
+	perror("epoll_ctl()");
+	return -1;
     };
+    return 0;
+};
+
+// Print to console and send to server
+int send_data(int server_fd) {
+    int flag = 0;
+    struct epoll_event events[MAX_EVENTS];
+    int ep_ret;
+    char buf[256];
+    char header[] = "GET HTTP/1.1\r\n";
+    char host[] = "Host: localhost\r\n";
+    char *request = strcat(header, host);
+    while (1 && !flag) {
+	// wait for epoll event
+        ep_ret = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+	if (ep_ret < 0) {
+	    perror("epoll_wait()");
+	    return 1;
+	};
+	for (int i = 0; i < ep_ret; i++) {
+	    if ((events[i].events & EPOLLERR) || (events[i].events & EPOLLHUP)) {
+		fprintf(stderr, "Error with event\n");
+		close(events[i].data.fd);
+		continue;
+	    } else if (events[i].data.fd == STDIN_FILENO) {
+		char stdin_buf[256];
+		if (read(STDIN_FILENO, stdin_buf, sizeof(stdin_buf)) < 0) {
+		    perror("read()");
+		    continue;
+		};
+		write(server_fd, request, strlen(request));
+	    } else if (events[i].data.fd == server_fd) {
+		char server_buf[256];
+		int read_bytes = read(server_fd, server_buf, sizeof(buf));
+		write(STDOUT_FILENO, server_buf, read_bytes);
+	    } else {
+		printf("Unknown file descriptor: %d\n", events[i].data.fd);
+	    };
+	};
+    };
+    return 0;
 };
 
 int connect_to_server() {
@@ -83,6 +115,7 @@ int connect_to_server() {
     if (sockfd < 0) {
     	error("Error creating socket");
     };
+    register_event(sockfd);
 
     hostinfo = gethostbyname("Localhost");
     if (hostinfo == NULL) {
@@ -95,7 +128,8 @@ int connect_to_server() {
 
     if (connect(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) {
 	error("Trouble connecting to server");
-    }
+    };
+    
     return sockfd;
 };
 
@@ -128,8 +162,25 @@ void process_args(int argc, char *argv[]) {
 int main(int argc, char *argv[]) {
     process_args(argc, argv);
     int server_fd = connect_to_server();
+    register_event(STDIN_FILENO);
     send_data(server_fd);
     printf("Closing connection\n");
     close(server_fd);
     exit(0);
 };
+
+
+
+
+
+	// for (int i = 0; i < read_bytes; i++) {
+	//     if (buf[i] == CR || buf[i] == LF) {
+	// 	write(STDOUT_FILENO, &CRLF, 2);
+	//     } else if (buf[i] == eof || buf[i] == CTRL_C) {
+	// 	flag = 1;
+	// 	break;
+	//     } else {
+	// 	write(STDOUT_FILENO, &buf[i], 1);
+	//     };
+	// }
+	// write(server_fd, &buf, read_bytes);

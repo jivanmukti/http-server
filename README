@@ -1,2 +1,2 @@
-Implementation of TCP server using I/O multiplexing.
+Implementation of TCP server using I/O multiplexing and http client.
 

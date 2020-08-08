@@ -1,3 +1,4 @@
+#include <cstring>
 #include <getopt.h>
 #include <bits/stdint-uintn.h>
 #include <fcntl.h>
@@ -90,14 +91,19 @@ int handle_client(int fd) {
 	    close_fd = 1;
 	    break;
 	};
-
 	int write_bytes = write(STDOUT_FILENO, buf, read_bytes);
 	if (write_bytes < 0) {
 	    perror("write()");
 	    return 1;
 	};
+	// write to client
+	char header[] = "200 HTTP/1.1 OK\r\n";
+	char host[] = "Host: Server\r\n";
+	char *request = strcat(header, host);
+	write(fd, request, strlen(request));
     };
     if (close_fd) {
+	printf("Exit\n");
 	close(fd);
     };
     return 0;
