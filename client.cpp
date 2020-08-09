@@ -11,6 +11,7 @@
 
 #define PORT 'p'
 #define MAX_EVENTS 10
+
 const char eof = 0x04;
 const char CTRL_C = 0x03;
 const char CR = 0x0D;
@@ -72,11 +73,8 @@ int send_data(int server_fd) {
     struct epoll_event events[MAX_EVENTS];
     int ep_ret;
     char buf[256];
-    char header[] = "GET HTTP/1.1\r\n";
-    char host[] = "Host: localhost\r\n";
-    char *request = strcat(header, host);
+    char header[] = "POST HTTP/1.1\r\nHost: localhost\r\n";
     while (1 && !flag) {
-	// wait for epoll event
         ep_ret = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
 	if (ep_ret < 0) {
 	    perror("epoll_wait()");
@@ -89,11 +87,15 @@ int send_data(int server_fd) {
 		continue;
 	    } else if (events[i].data.fd == STDIN_FILENO) {
 		char stdin_buf[256];
-		if (read(STDIN_FILENO, stdin_buf, sizeof(stdin_buf)) < 0) {
+		int read_bytes = read(STDIN_FILENO, stdin_buf, sizeof(stdin_buf));
+		if (read_bytes < 0) {
 		    perror("read()");
 		    continue;
 		};
-		write(server_fd, request, strlen(request));
+		char copy[512];
+		strcpy(copy, header);
+		strncat(copy, stdin_buf, read_bytes); 
+		write(server_fd, copy, strlen(copy));
 	    } else if (events[i].data.fd == server_fd) {
 		char server_buf[256];
 		int read_bytes = read(server_fd, server_buf, sizeof(buf));
