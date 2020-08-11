@@ -77,19 +77,23 @@ int send_data(int server_fd) {
     char buf[256];
     char header[] = "POST HTTP/1.1\r\nHost: localhost\r\n";
     char GET_header[] = "GET / HTTP/1.1\r\nHost: ";
-    char GET_suffix[] = "\r\nUser-Agent: curl/7.68.0\r\nAccept */*\r\n\r\n";
+    char GET_suffix[] = "\r\nUser-Agent: curl/7.68.0\r\nAccept: */*\r\n\r\n";
     char request_copy[512];
     strcpy(request_copy, GET_header);
     strncat(request_copy, hostname, strlen(hostname)); 
     strncat(request_copy, GET_suffix, strlen(GET_suffix)); 
     write(server_fd, request_copy, strlen(request_copy));
-    // printf("REQUEST VVVVV\n");
-    // write(STDOUT_FILENO, request_copy, strlen(request_copy));
+    write(STDOUT_FILENO, request_copy, strlen(request_copy));
 
-    char server_buf[2024];
+    char server_buf[1024];
     while (1) {
 	int read_bytes = read(server_fd, server_buf, sizeof(buf));
+	printf("Read bytes: %d\n", read_bytes);
 	write(STDOUT_FILENO, server_buf, read_bytes);
+	if (read_bytes == 0) {
+	    printf("Closing connection\n");
+	    break;
+	};
     };
 
     // while (1 && !flag) {
